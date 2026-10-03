@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, BufWriter, Read},
     net::TcpStream,
 };
 
@@ -9,7 +9,7 @@ pub type Header = HashMap<String, String>;
 
 #[derive(Debug)]
 ///A tuple struct where RequestHeader.0 is type Header
-pub struct RequestHeader(Header);
+pub struct RequestHeaders(Vec<Header>);
 
 #[derive(Debug, PartialEq)]
 ///Stores the start line of the struct as struct
@@ -21,22 +21,63 @@ pub struct RequestLine {
 
 #[derive(Debug, PartialEq)]
 enum RequestMethods {
-  Get,
-  Invalid(String),
+    Get,
+    Post,
+    Invalid(String),
 }
+
+#[derive(Debug)]
+pub struct RequestBody(Vec<u8>);
 #[derive(Debug)]
 //A struct representing a http request
 pub struct HttpRequest {
     request_line: RequestLine,
-    headers: Vec<RequestHeader>,
+    headers: RequestHeaders,
+    body: RequestBody,
 }
 
-impl RequestHeader {
+impl RequestHeaders {
     ///Creates a new request header
-    pub fn new(header: String, header_content: String) -> Self {
-        let mut header_map: HashMap<String, String> = HashMap::new();
-        header_map.insert(header, header_content);
-        Self(header_map)
+    fn new(headers: Vec<String>) -> Self {
+        RequestHeaders::parse_headers(headers)
+    }
+
+    pub fn get(&self, key: &str) -> Option<&String> {
+        self.0.iter().find_map(|map| map.get(key))
+    }
+
+    pub fn parse_headers(headers: Vec<String>) -> RequestHeaders {
+        //Parsing headers
+        let headers: Vec<Header> = headers
+            .iter()
+            .map(|header| {
+                let header: Vec<&str> = header.splitn(2, ":").collect();
+                let (header_title, header_content) = (header.get(0), header.get(1));
+                let header_title = match header_title {
+                    Some(str) => Some(str.to_string()),
+                    None => None,
+                };
+                let header_content = match header_content {
+                    Some(str) => Some(str.to_string()),
+                    None => None,
+                };
+                (header_title, header_content)
+            })
+            .filter(|header| match header {
+                (Some(_), Some(_)) => true,
+                _ => false,
+            })
+            .map(|header| -> Header {
+                let (header_title, header_content) = header;
+                let mut header: Header = HashMap::new();
+                header.insert(
+                    header_title.unwrap().trim().to_ascii_lowercase(),
+                    header_content.unwrap().trim().to_ascii_lowercase(),
+                );
+                header
+            })
+            .collect();
+        RequestHeaders(headers)
     }
 }
 
@@ -66,6 +107,7 @@ impl RequestLine {
 
         let method = match start_line[0] {
             "GET" => Get,
+            "POST" => Post,
             _ => Invalid(start_line[0].to_string()),
         };
 
@@ -77,48 +119,68 @@ impl RequestLine {
     }
 }
 
+impl RequestBody {
+    pub fn new(buffer: BufReader<&TcpStream>, content_length: Option<&String>) -> Self {
+        let body = RequestBody::parse_request_body(buffer, content_length);
+        RequestBody(body)
+    }
+    fn parse_request_body(
+        mut buffer: BufReader<&TcpStream>,
+        content_length: Option<&String>,
+    ) -> Vec<u8> {
+        let Some(content_length) = content_length else {
+            return Vec::new();
+        };
+
+        //TODO: don't use this implementation. if content length is found but can't parse it send back a bad request response
+        let content_length = content_length.parse::<usize>().unwrap_or(0);
+
+        let mut body = vec![0u8; content_length];
+
+        //TODO: Handle the case where the bytes remaining aren't enough to fill the bytes and any other error. if everything above is fine send a bad request response
+        buffer.read_exact(&mut body).unwrap();
+        body
+    }
+}
 
 impl HttpRequest {
     pub fn new(buffer: BufReader<&TcpStream>) -> Self {
-        let (request_line, headers) = Self::parse_request(buffer);
+        let (request_line, headers, body) = Self::parse_request(buffer);
         Self {
             request_line,
-            headers
+            headers,
+            body,
         }
     }
 
-    fn parse_request(buffer: BufReader<&TcpStream>) -> (RequestLine, Vec<RequestHeader>)
-    {
-        let mut content: Vec<String> = buffer.lines().map(|line| line.unwrap()).collect();
-        if content.get(0).unwrap() == "" {
-            content.remove(0);
-        }
-
-        let start_line = content.remove(0);
-
+    fn parse_request(
+        mut buffer: BufReader<&TcpStream>,
+    ) -> (RequestLine, RequestHeaders, RequestBody) {
+        let mut start_line = String::new();
+        //TODO: Error handling
+        buffer.read_line(&mut start_line).unwrap();
+        dbg!(&start_line);
         let request_line = RequestLine::new(start_line);
-        let mut headers: Vec<RequestHeader> = Vec::new();
-        for string in &content {
-            //split the string at : to give the header title and header content
-            let header: Vec<&str> = string.splitn(2, ":").collect();
+        let mut headers = Vec::new();
+        loop {
+            let mut header = String::new();
+            //TODO: Error Handling
+            buffer.read_line(&mut header).unwrap();
+            // dbg!(&header);
 
-            //if a header is valid it will have 2 elements in the header vec
-            if header.len() == 2 {
-                let request_header =
-                    RequestHeader::new(header[0].to_string(), header[1].to_string());
-                headers.push(request_header);
-            }
-
-            //if the len is zero its safe to assume we have reached \r\n separating the headers and content so we can break here
-            if header.len() == 0 {
+            if header == "\r\n".to_string() {
                 break;
             }
+            headers.push(header);
         }
-        //TODO: add a body field to http request and add the remainder of content to the body field, for now we do nothing. Drain the headers where range will be ..n where n is the len of headers since those are the number of items we want to remove
-        if headers.len() > 0 {
-            content.drain(..headers.len());
-        }
-        (request_line, headers)
+        let headers = RequestHeaders::new(headers);
+        //Parsing the body
+        dbg!(&headers);
+        let content_length = headers.get("content-length");
+        let body = RequestBody::new(buffer, content_length);
+
+        dbg!(&body);
+        (request_line, headers, body)
     }
 }
 

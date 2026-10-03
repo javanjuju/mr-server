@@ -1,6 +1,4 @@
-use std::{
-    io::{BufReader, BufWriter}, net::TcpListener,
-};
+use std::{io::{BufReader, BufWriter}, net::TcpListener};
 
 use mr_server::HttpRequest;
 
@@ -12,11 +10,11 @@ fn main() {
         let Ok(req) = request else {
             panic!("request returned Err");
         };
-        let buffer = BufReader::new(&req);
-        dbg!(&buffer);
-        let http_request = HttpRequest::new(buffer);
-        dbg!(&http_request);
 
+        let buffer = BufReader::new(&req);
+
+        let request = HttpRequest::new(buffer);
+       
         let _buffer = BufWriter::new(&req);
     }
 }
