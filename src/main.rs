@@ -1,8 +1,10 @@
-use std::{io::{BufReader, BufWriter}, net::TcpListener};
+use mr_server::requests;
+use std::{
+    io::{BufReader, BufWriter, Write},
+    net::TcpListener,
+};
 
-use mr_server::HttpRequest;
-
-
+//Testing out the http server framework
 fn main() {
     let stream = TcpListener::bind("127.0.0.1:3000").unwrap();
     for request in stream.incoming() {
@@ -13,10 +15,15 @@ fn main() {
 
         let buffer = BufReader::new(&req);
 
-        let request = HttpRequest::new(buffer);
-       
-        let _buffer = BufWriter::new(&req);
+        let request =  requests::HttpRequest::new(buffer).unwrap();
+
+        let mut buffer = BufWriter::new(&req);
+
+        dbg!(&request);
+
+        //TODO: handle error handling
+        buffer
+            .write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes())
+            .unwrap();
     }
 }
-
-

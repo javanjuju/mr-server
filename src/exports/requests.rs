@@ -4,9 +4,12 @@ use std::{
     net::TcpStream,
 };
 
+use std::io::ErrorKind;
+
+use crate::errors::requests::ParseError;
+
 ///A header is stored as a hashmap with the key being the header and the value being the header content
 pub type Header = HashMap<String, String>;
-
 #[derive(Debug)]
 ///A tuple struct where RequestHeader.0 is type Header
 pub struct RequestHeaders(Header);
@@ -23,7 +26,7 @@ pub struct RequestLine {
 enum RequestMethods {
     Get,
     Post,
-    Invalid(String),
+    Unsupported(String),
 }
 
 #[derive(Debug)]
@@ -36,17 +39,21 @@ pub struct HttpRequest {
     body: RequestBody,
 }
 
+///A shorthand for Result<T, ParseError>. Should be used where parse errors occur
+pub type ParseResult<T> = Result<T, ParseError>;
+
 impl RequestHeaders {
     ///Creates a new request header
-    fn new(headers: Vec<String>) -> Self {
+    fn new(headers: Vec<String>) -> ParseResult<Self> {
         RequestHeaders::parse_headers(headers)
     }
 
+    ///Returns a reference to the header value. key is the header
     pub fn get(&self, key: &str) -> Option<&String> {
         self.0.get(key)
     }
 
-    pub fn parse_headers(headers: Vec<String>) -> RequestHeaders {
+    pub fn parse_headers(headers: Vec<String>) -> ParseResult<RequestHeaders> {
         //Parsing headers
         let headers: HashMap<String, String> = headers
             .iter()
@@ -58,118 +65,143 @@ impl RequestHeaders {
             })
             .collect();
 
-        RequestHeaders(headers)
+        Ok(RequestHeaders(headers))
     }
 }
 
 impl RequestLine {
-    //Creates a new RequestLine, if method is invalid it will return a RequestLine with RequestMethod::Invalid an empty path
-    pub fn new(start_line: String) -> Self {
+    ///Creates a new RequestLine, if method is invalid it will return a RequestLine
+    pub fn new(start_line: String) -> ParseResult<Self> {
         use RequestMethods::*;
-        let (method, path, http_version) = Self::parse_start_line(start_line);
+        let (method, path, http_version) = Self::parse_start_line(start_line)?;
 
-        if let Invalid(_) = method {
-            return Self {
+        if let Unsupported(_) = method {
+            return Ok(Self {
                 method,
-                path: String::new(),
+                path,
                 http_version,
-            };
+            });
         }
-        Self {
+        Ok(Self {
             method,
             path,
             http_version,
-        }
+        })
     }
 
-    fn parse_start_line(start_line: String) -> (RequestMethods, String, String) {
+    ///Parses the start-line string of a http request. Returns a Result<T,E> where T: (RequestMethod, Path, HttpVersion)
+    fn parse_start_line(start_line: String) -> ParseResult<(RequestMethods, String, String)> {
         use RequestMethods::*;
-        let start_line: Vec<&str> = start_line.split(" ").collect();
-        //TODO: use get below instead of indexing
-        let method = match start_line[0] {
+        let start_line_separator = " ";
+        //TODO: Check if you can work with the iterator without having to use collect
+        let start_line_vec: Vec<&str> = start_line.split(start_line_separator).collect();
+
+        let method = start_line_vec.first()
+            .ok_or(ParseError::MalformedStartLine(start_line[..].to_string()))?;
+
+        let path = start_line_vec
+            .get(1)
+            .ok_or(ParseError::MalformedStartLine(start_line[..].to_string()))?;
+
+        let http_version = start_line_vec
+            .get(2)
+            .ok_or(ParseError::MalformedStartLine(start_line[..].to_string()))?;
+
+        let method = match *method {
             "GET" => Get,
             "POST" => Post,
-            _ => Invalid(start_line[0].to_string()),
+            _ => Unsupported(method.to_string()),
         };
 
-        if let Invalid(_) = method {
-            return (method, String::new(), start_line[2].to_string());
-        }
-
-        (method, start_line[1].to_string(), start_line[2].to_string())
+        Ok((method, path.to_string(), http_version.to_string()))
     }
 }
 
 impl RequestBody {
-    pub fn new(buffer: BufReader<&TcpStream>, content_length: Option<&String>) -> Self {
-        let body = RequestBody::parse_request_body(buffer, content_length);
-        RequestBody(body)
+    ///Create a new RequestBody from a BufReader<&TcpStream> and the value of the content-length header
+    pub fn new(
+        buffer: BufReader<&TcpStream>,
+        content_length: Option<&String>,
+    ) -> ParseResult<Self> {
+        let body = RequestBody::parse_request_body(buffer, content_length)?;
+        Ok(RequestBody(body))
     }
+
+    ///Takes the content length and returns a vector of bytes of that size
     fn parse_request_body(
         mut buffer: BufReader<&TcpStream>,
         content_length: Option<&String>,
-    ) -> Vec<u8> {
+    ) -> ParseResult<Vec<u8>> {
         let Some(content_length) = content_length else {
-            return Vec::new();
+            return Ok(Vec::new());
         };
 
-        //TODO: don't use this implementation. if content length is found but can't parse it send back a bad request response
-        let content_length = content_length.parse::<usize>().unwrap_or(0);
-
+        let Ok(content_length)  = content_length.parse::<usize>() else{
+            return Err(ParseError::InvalidContentLength(content_length.to_string()))
+        };
+        
         let mut body = vec![0u8; content_length];
 
-        //TODO: Handle the case where the bytes remaining aren't enough to fill the bytes and any other error. if everything above is fine send a bad request response
-        buffer.read_exact(&mut body).unwrap();
-        body
+        if let Err(err) = buffer.read_exact(&mut body) {
+            match err.kind() {
+                ErrorKind::UnexpectedEof => {
+                    return Err(ParseError::BodyTooShort {
+                        expected: content_length,
+                        got: body.len(),
+                    })
+                }
+                _ => return Err(ParseError::Io(err)),
+            }
+        }
+        Ok(body)
     }
 }
 
 impl HttpRequest {
-    pub fn new(buffer: BufReader<&TcpStream>) -> Self {
-        let (request_line, headers, body) = Self::parse_request(buffer);
-        Self {
+    ///Creates a new HttpRequest
+    pub fn new(buffer: BufReader<&TcpStream>) -> ParseResult<Self> {
+        let (request_line, headers, body) = Self::parse_request(buffer)?;
+        Ok(Self {
             request_line,
             headers,
             body,
-        }
+        })
     }
 
+    ///Parses the http request into RequestLine, RequestHeaders and RequestBody. Returns a Result where E: ParseError
     fn parse_request(
         mut buffer: BufReader<&TcpStream>,
-    ) -> (RequestLine, RequestHeaders, RequestBody) {
+    ) -> ParseResult<(RequestLine, RequestHeaders, RequestBody)> {
         let mut start_line = String::new();
-        //TODO: Error handling
-        buffer.read_line(&mut start_line).unwrap();
-        dbg!(&start_line);
-        let request_line = RequestLine::new(start_line);
+        buffer.read_line(&mut start_line)?;
+        let request_line = RequestLine::new(start_line)?;
+
         let mut headers = Vec::new();
         loop {
             let mut header = String::new();
-            //TODO: Error Handling
-            buffer.read_line(&mut header).unwrap();
-            // dbg!(&header);
+            buffer.read_line(&mut header)?;
 
-            if header == "\r\n".to_string() {
+            if header == "\r\n" {
                 break;
             }
             headers.push(header);
         }
-        let headers = RequestHeaders::new(headers);
+        let headers = RequestHeaders::new(headers)?;
         //Parsing the body
-        dbg!(&headers);
-        let content_length = headers.get("content-length");
-        let body = RequestBody::new(buffer, content_length);
 
-        dbg!(&body);
-        (request_line, headers, body)
+        let content_length = headers.get("content-length");
+        let body = RequestBody::new(buffer, content_length)?;
+
+        Ok((request_line, headers, body))
     }
 }
 
+//TODO: Write unit tests for this module
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn produces_a_valid_request_line_struct_from_the_start_line() {
+    fn produces_a_valid_request_line_struct_from_the_start_line() -> ParseResult<()> {
         let valid_start_line = "GET /index.html HTTP/1.1";
         let request_line = RequestLine {
             http_version: "HTTP/1.1".to_string(),
@@ -177,8 +209,9 @@ mod tests {
             path: "/index.html".to_string(),
         };
 
-        let generated_request_line = RequestLine::new(valid_start_line.to_string());
+        let generated_request_line = RequestLine::new(valid_start_line.to_string())?;
 
         assert_eq!(generated_request_line, request_line);
+        Ok(())
     }
 }
