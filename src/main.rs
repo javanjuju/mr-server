@@ -1,8 +1,15 @@
-use mr_server::requests;
+use mr_server::{requests, responses};
+use serde::Serialize;
 use std::{
-    io::{BufReader, BufWriter, Write},
+    io::{BufReader, BufWriter},
     net::TcpListener,
 };
+
+#[derive(Serialize)]
+struct Student {
+    name: String,
+    age: u8,
+}
 
 //Testing out the http server framework
 fn main() {
@@ -15,15 +22,21 @@ fn main() {
 
         let buffer = BufReader::new(&req);
 
-        let request =  requests::HttpRequest::new(buffer).unwrap();
+        let request = requests::HttpRequest::new(buffer).unwrap();
 
         let mut buffer = BufWriter::new(&req);
 
         dbg!(&request);
 
-        //TODO: handle error handling
-        buffer
-            .write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes())
-            .unwrap();
+        let st = Student {
+            age: 20,
+            name: "javan".to_string(),
+        };
+
+        let response = responses::HttpResponse::json(&st);
+
+        dbg!(&response);
+
+        response.write_to(&mut buffer);
     }
 }

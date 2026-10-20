@@ -96,7 +96,8 @@ impl RequestLine {
         //TODO: Check if you can work with the iterator without having to use collect
         let start_line_vec: Vec<&str> = start_line.split(start_line_separator).collect();
 
-        let method = start_line_vec.first()
+        let method = start_line_vec
+            .first()
             .ok_or(ParseError::MalformedStartLine(start_line[..].to_string()))?;
 
         let path = start_line_vec
@@ -136,10 +137,10 @@ impl RequestBody {
             return Ok(Vec::new());
         };
 
-        let Ok(content_length)  = content_length.parse::<usize>() else{
-            return Err(ParseError::InvalidContentLength(content_length.to_string()))
+        let Ok(content_length) = content_length.parse::<usize>() else {
+            return Err(ParseError::InvalidContentLength(content_length.to_string()));
         };
-        
+
         let mut body = vec![0u8; content_length];
 
         if let Err(err) = buffer.read_exact(&mut body) {
