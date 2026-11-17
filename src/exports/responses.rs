@@ -1,3 +1,4 @@
+use crate::errors::responses::ResponseError;
 use std::{collections::HashMap, io::Write};
 
 use httpdate;
@@ -19,7 +20,6 @@ pub struct ResponseHeaders(Headers);
 #[derive(Debug)]
 pub struct ResponseBody {
     body: Vec<u8>,
-    len: usize,
 }
 
 #[derive(Debug)]
@@ -38,25 +38,40 @@ impl ResponseHeaders {
     }
 
     ///Set the header name and its value
-    pub fn set_header(&mut self, name: &str, value: &str) {
-        //TODO: validate whether headers names are in the right format. Maybe use an enum for headers?
-        self.0
-            .insert(name.trim().to_string(), value.trim().to_string());
+    pub fn set_header(&mut self, name: &str, value: &str) -> Result<(), ResponseError> {
+        let name = name.trim().to_lowercase();
+        let value = value.trim();
+
+        //validate headers
+        let valid_name = !name.is_empty()
+            && name
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b));
+        if !valid_name {
+            return Err(ResponseError::InvalidHeader(format!("bad name: {name:?}")));
+        }
+        if value.bytes().any(|b| b == b'\r' || b == b'\n') {
+            return Err(ResponseError::InvalidHeader("value contains CR/LF".into()));
+        }
+        self.0.insert(name, value.to_string());
+
+        Ok(())
     }
 
     ///Get the value of a header
     pub fn get_header(&self, name: &str) -> Option<&String> {
-        self.0.get(name)
+        self.0.get(&name.to_lowercase())
     }
 
     ///Remove a header
     pub fn remove_header(&mut self, name: &str) {
+        let name = &name.to_lowercase();
         self.0.remove(name);
     }
 
     ///Check if a header is present
     pub fn has_header(&self, name: &str) -> bool {
-        self.0.contains_key(name)
+        self.0.contains_key(&name.to_lowercase())
     }
 
     ///Turns the headers into a byte sequence valid for http
@@ -65,7 +80,7 @@ impl ResponseHeaders {
         let mut out = Vec::new();
         for (name, value) in &self.0 {
             out.extend_from_slice(name.as_bytes());
-            out.extend_from_slice(b":");
+            out.extend_from_slice(b": ");
             out.extend_from_slice(value.as_bytes());
             out.extend_from_slice(b"\r\n");
         }
@@ -101,22 +116,22 @@ impl StatusLine {
 impl ResponseBody {
     ///Creates a new ResponseBody
     pub fn new(body: Vec<u8>) -> Self {
-        ResponseBody {
-            len: body.len(),
-            body,
-        }
+        ResponseBody { body }
     }
 
     ///Gets the length of the response body in usize
     pub fn get_body_len(&self) -> usize {
-        self.len
+        self.body.len()
     }
 }
 
 impl HttpResponse {
     ///Creates a new HttpResponse and returns it
     pub fn new(status_line: StatusLine, mut headers: ResponseHeaders, body: ResponseBody) -> Self {
-        headers.set_header("content-length", &body.get_body_len().to_string());
+        headers.0.insert(
+            "content-length".to_string(),
+            body.get_body_len().to_string(),
+        );
         HttpResponse {
             status_line,
             response_headers: headers,
@@ -135,17 +150,14 @@ impl HttpResponse {
     }
 
     ///Returns a HttpResponse with the status line, headers and body already set. The object is converted to bytes and set as the response body
-    pub fn json<T>(object: &T) -> Self
+    pub fn json<T>(object: &T) -> Result<HttpResponse, ResponseError>
     where
         T: Serialize,
     {
+        //TODO: Some headers are added to basically any response, add a function for default headers
         let mut headers: Headers = HashMap::new();
-        //TODO:Error handling
-        let body = serde_json::to_vec(object).unwrap();
+        let body = serde_json::to_vec(object)?;
         let response_body = ResponseBody::new(body);
-
-        let content_length = response_body.get_body_len().to_string();
-        headers.insert("content-length".to_string(), content_length);
 
         let date = http_date();
         headers.insert("date".to_string(), date);
@@ -154,21 +166,19 @@ impl HttpResponse {
         let connection = "close".to_string();
         headers.insert("connection".to_string(), connection);
 
-        headers.insert("content-Type".to_string(), "application/json".to_string());
+        headers.insert("content-type".to_string(), "application/json".to_string());
 
         let headers = ResponseHeaders::new(headers);
 
         let status_line = StatusLine::new(200, Some("OK".to_string()));
 
-        HttpResponse::new(status_line, headers, response_body)
+        Ok(HttpResponse::new(status_line, headers, response_body))
     }
 
     ///Write to a TcpStream. TcpStream can be anything that implements Write, use preferably with a TcpStream wrapped with BufWriter
-    pub fn write_to(&self, tcp_stream: &mut impl Write) {
-        //TODO: Error handling
-        tcp_stream.write_all(&self.to_bytes()).unwrap();
-        //TODO: Error Handling
-        tcp_stream.flush().unwrap()
+    pub fn write_to(&self, tcp_stream: &mut impl Write) -> std::io::Result<()> {
+        tcp_stream.write_all(&self.to_bytes())?;
+        tcp_stream.flush()
     }
 }
 

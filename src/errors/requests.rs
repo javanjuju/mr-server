@@ -12,7 +12,7 @@ impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ParseError::BodyTooShort { expected, got } => {
-                write!(f, "Expected body of Content_Length: {expected}, got: {got}")
+                write!(f, "Expected body of Content-Length: {expected}, got: {got}")
             }
             ParseError::InvalidContentLength(string) => {
                 write!(f, "Invalid Content Length. got: {string}")
@@ -26,7 +26,14 @@ impl std::fmt::Display for ParseError {
     }
 }
 
-impl std::error::Error for ParseError {}
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ParseError::Io(e) => Some(e),
+            _ => None,
+        }
+    }
+}
 
 impl From<std::io::Error> for ParseError {
     fn from(value: std::io::Error) -> Self {

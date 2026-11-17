@@ -33,7 +33,7 @@ fn main() {
             name: "javan".to_string(),
         };
 
-        let response = responses::HttpResponse::json(&st);
+        let response = responses::HttpResponse::json(&st).unwrap();
 
         dbg!(&response);
 
