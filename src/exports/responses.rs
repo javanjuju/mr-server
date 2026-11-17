@@ -23,6 +23,7 @@ pub struct ResponseBody {
 }
 
 #[derive(Debug)]
+//TODO: After creating a HttpResponse struct the user of the library has no way of appending any new headers or changing any of the internal fields. Consider exposing some functions of the struct fields although for now it works well
 pub struct HttpResponse {
     status_line: StatusLine,
     response_headers: ResponseHeaders,
@@ -76,7 +77,6 @@ impl ResponseHeaders {
 
     ///Turns the headers into a byte sequence valid for http
     pub fn to_bytes(&self) -> Vec<u8> {
-        //TODO:  Is this a valid name for the method. does this method also need to consume the value
         let mut out = Vec::new();
         for (name, value) in &self.0 {
             out.extend_from_slice(name.as_bytes());
@@ -97,6 +97,29 @@ impl StatusLine {
             status_code: status_code.to_string(),
             reason_phrase,
         }
+    }
+
+    ///Creates a new Status line given the status code
+    pub fn from_code(status_code: u16) -> Self {
+        let reason_phrase = match status_code {
+            //TODO: Add other codes. see https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
+            //Successful responses
+            200 => "OK",
+            201 => "Created",
+            //Client Error Responses
+            400 => "Bad Request",
+            401 => "Unauthorized",
+            411 => "Length Required",
+            413 => "Content Too Large",
+            //Server Error Responses
+            500 => "Internal Server Error",
+            501 => "Not Implemented",
+            502 => "Bad Gateway",
+            505 => "Http Version Not Supported",
+            _ => "",
+        };
+
+        StatusLine::new(status_code, Some(reason_phrase.to_string()))
     }
 
     ///Converts the status line to a byte vector valid for http
@@ -139,6 +162,34 @@ impl HttpResponse {
         }
     }
 
+    ///Creates a HttpResponse from a status code
+    pub fn with_status(code: u16) -> Self {
+        let mut headers = HashMap::new();
+        headers.insert("date".to_string(), http_date());
+        headers.insert("connection".to_string(), "close".to_string());
+
+        HttpResponse::new(
+            StatusLine::from_code(code),
+            ResponseHeaders::new(headers),
+            ResponseBody::new(Vec::new()),
+        )
+    }
+
+    ///Creates a HttpResponse with the code 404
+    pub fn not_found() -> Self {
+        Self::with_status(404)
+    }
+
+    ///Creates a HttpResponse with code 400
+    pub fn bad_request() -> Self {
+        Self::with_status(400)
+    }
+
+    ///Creates a HttpResponse with code 500
+    pub fn internal_server_error() -> Self {
+        Self::with_status(500)
+    }
+
     ///Returns a vector of bytes valid for http
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::new();
@@ -155,16 +206,9 @@ impl HttpResponse {
         T: Serialize,
     {
         //TODO: Some headers are added to basically any response, add a function for default headers
-        let mut headers: Headers = HashMap::new();
+        let mut headers: Headers = default_headers();
         let body = serde_json::to_vec(object)?;
         let response_body = ResponseBody::new(body);
-
-        let date = http_date();
-        headers.insert("date".to_string(), date);
-
-        //TODO: figure out how to keep the connection alive
-        let connection = "close".to_string();
-        headers.insert("connection".to_string(), connection);
 
         headers.insert("content-type".to_string(), "application/json".to_string());
 
@@ -185,3 +229,15 @@ impl HttpResponse {
 fn http_date() -> String {
     httpdate::fmt_http_date(std::time::SystemTime::now())
 }
+
+fn default_headers() -> Headers {
+    let mut headers = HashMap::new();
+    let date = http_date();
+    headers.insert("date".to_string(), date);
+    //TODO: figure out how to keep the connection alive. use an infinite loop where the headers are being handled to keep it from being dropped. Add mechanisms to break the loop when the connection needs to be closed
+    let connection = "close".to_string();
+    headers.insert("connection".to_string(), connection);
+    headers
+}
+
+//TODO: Write tests for this module
