@@ -16,6 +16,7 @@ pub struct RequestHeaders(Header);
 
 #[derive(Debug, PartialEq)]
 ///Stores the start line of the struct as struct
+//TODO: Parse the queries as well
 pub struct RequestLine {
     method: RequestMethods,
     path: String,
@@ -50,7 +51,7 @@ impl RequestHeaders {
 
     ///Returns a reference to the header value. key is the header
     pub fn get(&self, key: &str) -> Option<&String> {
-        self.0.get(key)
+        self.0.get(&key.to_lowercase())
     }
 
     pub fn parse_headers(headers: Vec<String>) -> ParseResult<RequestHeaders> {
@@ -60,7 +61,7 @@ impl RequestHeaders {
             .filter_map(|header| {
                 let mut parts = header.splitn(2, ':');
                 let key = parts.next()?.trim().to_ascii_lowercase();
-                let value = parts.next()?.trim().to_ascii_lowercase();
+                let value = parts.next()?.trim().to_string();
                 Some((key, value))
             })
             .collect();
@@ -92,6 +93,7 @@ impl RequestLine {
     ///Parses the start-line string of a http request. Returns a Result<T,E> where T: (RequestMethod, Path, HttpVersion)
     fn parse_start_line(start_line: String) -> ParseResult<(RequestMethods, String, String)> {
         use RequestMethods::*;
+        let start_line = start_line.trim_end().to_string();
         let start_line_separator = " ";
         //TODO: Check if you can work with the iterator without having to use collect
         let start_line_vec: Vec<&str> = start_line.split(start_line_separator).collect();
@@ -174,15 +176,19 @@ impl HttpRequest {
         mut buffer: BufReader<&TcpStream>,
     ) -> ParseResult<(RequestLine, RequestHeaders, RequestBody)> {
         let mut start_line = String::new();
-        buffer.read_line(&mut start_line)?;
+        //if a client immediately disconnects the result of read_line will be 0
+        if buffer.read_line(&mut start_line)? == 0 {
+            return Err(ParseError::Io(std::io::ErrorKind::UnexpectedEof.into()));
+        }
         let request_line = RequestLine::new(start_line)?;
 
         let mut headers = Vec::new();
         loop {
             let mut header = String::new();
-            buffer.read_line(&mut header)?;
-
-            if header == "\r\n" {
+            if buffer.read_line(&mut header)? == 0 {
+                return Err(ParseError::Io(std::io::ErrorKind::UnexpectedEof.into()));
+            }
+            if header.trim_end().is_empty() {
                 break;
             }
             headers.push(header);
