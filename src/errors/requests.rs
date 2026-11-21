@@ -2,6 +2,7 @@
 #[derive(Debug)]
 pub enum ParseError {
     MalformedStartLine(String),
+    InvalidMethod(String),
     InvalidHeader(String),
     InvalidContentLength(String),
     BodyTooShort { expected: usize, got: usize },
@@ -14,13 +15,16 @@ impl std::fmt::Display for ParseError {
             ParseError::BodyTooShort { expected, got } => {
                 write!(f, "Expected body of Content-Length: {expected}, got: {got}")
             }
-            ParseError::InvalidContentLength(string) => {
-                write!(f, "Invalid Content Length. got: {string}")
+            ParseError::InvalidContentLength(content_length) => {
+                write!(f, "Invalid Content Length. got: {content_length}")
             }
-            ParseError::InvalidHeader(string) => write!(f, "Invalid Header. got {string}"),
+            ParseError::InvalidHeader(header) => write!(f, "Invalid Header. got {header}"),
             ParseError::Io(err) => write!(f, "IO Error. error: {err}"),
-            ParseError::MalformedStartLine(string) => {
-                write!(f, "Invalid Start Line. got: {string}")
+            ParseError::MalformedStartLine(start_line) => {
+                write!(f, "Invalid Start Line. got: {start_line}")
+            },
+            ParseError::InvalidMethod(method) => {
+                write!(f, "Invalid method. got{method}")
             }
         }
     }

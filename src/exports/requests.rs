@@ -27,7 +27,14 @@ pub struct RequestLine {
 pub enum RequestMethod {
     Get,
     Post,
-    Unsupported(String),
+    Put,
+    Patch,
+    Delete,
+    Query,
+    Connect,
+    Head,
+    Trace,
+    Options
 }
 
 #[derive(Debug)]
@@ -73,16 +80,8 @@ impl RequestHeaders {
 impl RequestLine {
     ///Creates a new RequestLine, if method is invalid it will return a RequestLine
     pub fn new(start_line: String) -> ParseResult<Self> {
-        use RequestMethod::*;
         let (method, path, http_version) = Self::parse_start_line(start_line)?;
 
-        if let Unsupported(_) = method {
-            return Ok(Self {
-                method,
-                path,
-                http_version,
-            });
-        }
         Ok(Self {
             method,
             path,
@@ -113,7 +112,15 @@ impl RequestLine {
         let method = match *method {
             "GET" => Get,
             "POST" => Post,
-            _ => Unsupported(method.to_string()),
+            "DELETE" => Delete,
+            "PUT" => Put,
+            "PATCH" => Patch,
+            "HEAD" => Head,
+            "QUERY" => Query,
+            "CONNECT" => Connect,
+            "TRACE" => Trace,
+            "OPTIONS" => Options,
+            _ => return Err(ParseError::InvalidMethod(method.to_string())),
         };
 
         Ok((method, path.to_string(), http_version.to_string()))
