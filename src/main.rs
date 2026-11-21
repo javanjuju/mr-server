@@ -1,4 +1,8 @@
-use mr_server::{requests, responses};
+use mr_server::{
+    requests::{self, HttpRequest},
+    responses::{self, HttpResponse},
+    server::Server,
+};
 use serde::Serialize;
 use std::{
     io::{BufReader, BufWriter},
@@ -13,30 +17,20 @@ struct Student {
 
 //Testing out the http server framework
 fn main() {
-    let stream = TcpListener::bind("127.0.0.1:3000").unwrap();
-    for request in stream.incoming() {
-        println!("request sent by web");
-        let Ok(req) = request else {
-            panic!("request returned Err");
-        };
-
-        let buffer = BufReader::new(&req);
-
-        let request = requests::HttpRequest::new(buffer).unwrap();
-
-        let mut buffer = BufWriter::new(&req);
-
-        dbg!(&request);
-
+    fn handler(_: &HttpRequest) -> HttpResponse {
         let st = Student {
             age: 20,
             name: "javan".to_string(),
         };
-
-        let response = responses::HttpResponse::json(&st).unwrap();
-
-        dbg!(&response);
-
-        response.write_to(&mut buffer);
+        HttpResponse::json(&st).unwrap()
     }
+
+    let server = Server::new("127.0.0.1:3000", &handler);
+    match server.listen() {
+        Ok(_) => println!("Server Started"),
+        Err(e) => {
+            eprintln!("Failed to start server");
+            dbg!(e);
+        }
+    };
 }
