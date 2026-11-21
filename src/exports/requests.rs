@@ -18,13 +18,13 @@ pub struct RequestHeaders(Header);
 ///Stores the start line of the struct as struct
 //TODO: Parse the queries as well
 pub struct RequestLine {
-    method: RequestMethods,
+    method: RequestMethod,
     path: String,
     http_version: String,
 }
 
 #[derive(Debug, PartialEq)]
-enum RequestMethods {
+pub enum RequestMethod {
     Get,
     Post,
     Unsupported(String),
@@ -73,7 +73,7 @@ impl RequestHeaders {
 impl RequestLine {
     ///Creates a new RequestLine, if method is invalid it will return a RequestLine
     pub fn new(start_line: String) -> ParseResult<Self> {
-        use RequestMethods::*;
+        use RequestMethod::*;
         let (method, path, http_version) = Self::parse_start_line(start_line)?;
 
         if let Unsupported(_) = method {
@@ -91,8 +91,8 @@ impl RequestLine {
     }
 
     ///Parses the start-line string of a http request. Returns a Result<T,E> where T: (RequestMethod, Path, HttpVersion)
-    fn parse_start_line(start_line: String) -> ParseResult<(RequestMethods, String, String)> {
-        use RequestMethods::*;
+    fn parse_start_line(start_line: String) -> ParseResult<(RequestMethod, String, String)> {
+        use RequestMethod::*;
         let start_line = start_line.trim_end().to_string();
         let start_line_separator = " ";
         //TODO: Check if you can work with the iterator without having to use collect
@@ -201,6 +201,26 @@ impl HttpRequest {
 
         Ok((request_line, headers, body))
     }
+
+    ///Gets the method of a request as RequestMethod
+    pub fn method(&self) -> &RequestMethod {
+        &self.request_line.method
+    }
+
+    ///Gets the path of a request
+    pub fn path(&self) -> &str {
+        &self.request_line.path
+    }
+
+    ///Gets the headers of a request as RequestHeaders
+    pub fn headers(&self) -> &RequestHeaders {
+        &self.headers
+    }
+
+    ///Gets the body of a request as an array of bytes
+    pub fn body(&self) -> &[u8] {
+        &self.body.0
+    }
 }
 
 //TODO: Write unit tests for this module
@@ -212,7 +232,7 @@ mod tests {
         let valid_start_line = "GET /index.html HTTP/1.1";
         let request_line = RequestLine {
             http_version: "HTTP/1.1".to_string(),
-            method: RequestMethods::Get,
+            method: RequestMethod::Get,
             path: "/index.html".to_string(),
         };
 
