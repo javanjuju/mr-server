@@ -1,6 +1,8 @@
 mod errors;
 mod exports;
 
-pub use exports::requests;
-pub use exports::responses;
-pub use exports::server;
+pub use errors::requests::ParseError;
+pub use errors::responses::ResponseError;
+pub use exports::requests::HttpRequest;
+pub use exports::responses::{HttpResponse, ResponseBody, ResponseHeaders, StatusLine};
+pub use exports::server::Server;

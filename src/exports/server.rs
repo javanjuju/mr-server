@@ -3,7 +3,7 @@ use std::{
     net::{TcpListener, TcpStream},
 };
 
-use crate::{errors::requests::ParseError, requests::HttpRequest, responses::HttpResponse};
+use crate::{errors::requests::ParseError, HttpRequest, HttpResponse};
 
 pub struct Server<F>
 where

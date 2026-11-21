@@ -1,13 +1,5 @@
-use mr_server::{
-    requests::{self, HttpRequest},
-    responses::{self, HttpResponse},
-    server::Server,
-};
+use mr_server::{HttpRequest, HttpResponse, Server};
 use serde::Serialize;
-use std::{
-    io::{BufReader, BufWriter},
-    net::TcpListener,
-};
 
 #[derive(Serialize)]
 struct Student {
@@ -24,7 +16,6 @@ fn main() {
         };
         HttpResponse::json(&st).unwrap()
     }
-
     let server = Server::new("127.0.0.1:3000", &handler);
     match server.listen() {
         Ok(_) => println!("Server Started"),
