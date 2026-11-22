@@ -109,6 +109,9 @@ impl StatusLine {
             //Client Error Responses
             400 => "Bad Request",
             401 => "Unauthorized",
+            404 => "Not Found",
+            408 => "Request Timeout",
+            405 => "Method Not Allowed",
             411 => "Length Required",
             413 => "Content Too Large",
             //Server Error Responses
@@ -162,40 +165,44 @@ impl HttpResponse {
         }
     }
 
-    ///Creates a HttpResponse from a status code
-    pub fn with_status(code: u16) -> Self {
-        let headers = default_headers();
-       
+    ///Creates a HttpResponse from a status code. Default headers are applied if no headers are provided
+    pub fn with_status(code: u16, headers: Option<Headers>) -> Self {
+        let mut merged = default_headers();
+        merged.extend(headers.unwrap_or_default());
+
         HttpResponse::new(
             StatusLine::from_code(code),
-            ResponseHeaders::new(headers),
+            ResponseHeaders::new(merged),
             ResponseBody::new(Vec::new()),
         )
     }
 
+    //TODO: Some responses require additional headers. Change this methods to accept headers where necessary or just make it that all the methods below can have extra headers added to them
     ///Creates a HttpResponse with the code 404
     pub fn not_found() -> Self {
-        Self::with_status(404)
+        Self::with_status(404, None)
     }
 
     ///Creates a HttpResponse with code 400
     pub fn bad_request() -> Self {
-        Self::with_status(400)
+        Self::with_status(400, None)
     }
 
     ///Creates a HttpResponse with code 500
     pub fn internal_server_error() -> Self {
-        Self::with_status(500)
+        Self::with_status(500, None)
     }
 
-    ///Creates a HttpResponse with code 405 
-    pub fn method_not_allowed() -> Self {
-        Self::with_status(405)
+    ///Creates a HttpResponse with code 405
+    pub fn method_not_allowed(allowed_methods: Vec<&str>) -> Self {
+        let mut headers: Headers = HashMap::new();
+        headers.insert("allow".to_string(), allowed_methods.join(", "));
+        Self::with_status(405, Some(headers))
     }
 
-    ///Creates a HttpResponse with code 501 
+    ///Creates a HttpResponse with code 501
     pub fn method_not_implemented() -> Self {
-        Self::with_status(501)
+        Self::with_status(501, None)
     }
 
     ///Returns a vector of bytes valid for http

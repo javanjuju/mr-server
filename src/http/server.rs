@@ -45,8 +45,8 @@ where
             Err(e) => {
                 eprintln!("bad request: {e}");
                 match e {
-                    ParseError::UnsupportedMethod(_) =>  HttpResponse::method_not_implemented(),
-                    _ => HttpResponse::bad_request()
+                    ParseError::UnsupportedMethod(_) => HttpResponse::method_not_implemented(),
+                    _ => HttpResponse::bad_request(),
                 }
             }
         };

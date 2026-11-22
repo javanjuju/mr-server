@@ -36,6 +36,22 @@ pub enum RequestMethod {
     Trace,
     Options,
 }
+impl RequestMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RequestMethod::Get => "GET",
+            RequestMethod::Post => "POST",
+            RequestMethod::Put => "PUT",
+            RequestMethod::Patch => "PATCH",
+            RequestMethod::Delete => "DELETE",
+            RequestMethod::Query => "QUERY",
+            RequestMethod::Connect => "CONNECT",
+            RequestMethod::Head => "HEAD",
+            RequestMethod::Trace => "TRACE",
+            RequestMethod::Options => "OPTIONS",
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct RequestBody(Vec<u8>);
