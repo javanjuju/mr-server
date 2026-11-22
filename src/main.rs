@@ -1,4 +1,4 @@
-use mr_server::{HttpRequest, HttpResponse, Server};
+use mr_server::{HttpRequest, HttpResponse, Router, Server};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -9,6 +9,7 @@ struct Student {
 
 //Testing out the http server framework
 fn main() {
+    let mut router = Router::new();
     fn handler(_: &HttpRequest) -> HttpResponse {
         let st = Student {
             age: 20,
@@ -16,7 +17,10 @@ fn main() {
         };
         HttpResponse::json(&st).unwrap()
     }
-    let server = Server::new("127.0.0.1:3000", &handler);
+    
+    router.get("/get", handler);
+
+    let server = Server::new("127.0.0.1:3000", move |req| router.handle(req));
     match server.listen() {
         Ok(_) => println!("Server Started"),
         Err(e) => {

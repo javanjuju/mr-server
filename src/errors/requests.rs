@@ -2,7 +2,7 @@
 #[derive(Debug)]
 pub enum ParseError {
     MalformedStartLine(String),
-    InvalidMethod(String),
+    UnsupportedMethod(String),
     InvalidHeader(String),
     InvalidContentLength(String),
     BodyTooShort { expected: usize, got: usize },
@@ -22,9 +22,9 @@ impl std::fmt::Display for ParseError {
             ParseError::Io(err) => write!(f, "IO Error. error: {err}"),
             ParseError::MalformedStartLine(start_line) => {
                 write!(f, "Invalid Start Line. got: {start_line}")
-            },
-            ParseError::InvalidMethod(method) => {
-                write!(f, "Invalid method. got{method}")
+            }
+            ParseError::UnsupportedMethod(method) => {
+                write!(f, "Invalid method. got: {method}")
             }
         }
     }

@@ -23,7 +23,7 @@ pub struct RequestLine {
     http_version: String,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum RequestMethod {
     Get,
     Post,
@@ -34,7 +34,7 @@ pub enum RequestMethod {
     Connect,
     Head,
     Trace,
-    Options
+    Options,
 }
 
 #[derive(Debug)]
@@ -120,7 +120,7 @@ impl RequestLine {
             "CONNECT" => Connect,
             "TRACE" => Trace,
             "OPTIONS" => Options,
-            _ => return Err(ParseError::InvalidMethod(method.to_string())),
+            _ => return Err(ParseError::UnsupportedMethod(method.to_string())),
         };
 
         Ok((method, path.to_string(), http_version.to_string()))

@@ -44,7 +44,10 @@ where
             Err(ParseError::Io(_)) => return, // client left, nothing to answer
             Err(e) => {
                 eprintln!("bad request: {e}");
-                HttpResponse::bad_request()
+                match e {
+                    ParseError::UnsupportedMethod(_) =>  HttpResponse::method_not_implemented(),
+                    _ => HttpResponse::bad_request()
+                }
             }
         };
 

@@ -164,10 +164,8 @@ impl HttpResponse {
 
     ///Creates a HttpResponse from a status code
     pub fn with_status(code: u16) -> Self {
-        let mut headers = HashMap::new();
-        headers.insert("date".to_string(), http_date());
-        headers.insert("connection".to_string(), "close".to_string());
-
+        let headers = default_headers();
+       
         HttpResponse::new(
             StatusLine::from_code(code),
             ResponseHeaders::new(headers),
@@ -188,6 +186,16 @@ impl HttpResponse {
     ///Creates a HttpResponse with code 500
     pub fn internal_server_error() -> Self {
         Self::with_status(500)
+    }
+
+    ///Creates a HttpResponse with code 405 
+    pub fn method_not_allowed() -> Self {
+        Self::with_status(405)
+    }
+
+    ///Creates a HttpResponse with code 501 
+    pub fn method_not_implemented() -> Self {
+        Self::with_status(501)
     }
 
     ///Returns a vector of bytes valid for http
