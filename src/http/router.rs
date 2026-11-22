@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{exports::requests::RequestMethod, HttpRequest, HttpResponse};
+use crate::{http::requests::RequestMethod, HttpRequest, HttpResponse};
 
 type Handler = Box<dyn Fn(&HttpRequest) -> HttpResponse + Sync + Send + 'static>;
 

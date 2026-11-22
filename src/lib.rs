@@ -1,9 +1,9 @@
 mod errors;
-mod exports;
+mod http;
 
 pub use errors::requests::ParseError;
 pub use errors::responses::ResponseError;
-pub use exports::requests::HttpRequest;
-pub use exports::responses::{HttpResponse, ResponseBody, ResponseHeaders, StatusLine};
-pub use exports::server::Server;
-pub use exports::router::Router;
+pub use http::requests::HttpRequest;
+pub use http::responses::{HttpResponse, ResponseBody, ResponseHeaders, StatusLine};
+pub use http::server::Server;
+pub use http::router::Router;
